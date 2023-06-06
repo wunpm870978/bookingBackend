@@ -7,10 +7,13 @@
 var app = require('../app');
 var debug = require('debug')('bookingbackend:server');
 var http = require('http');
+const MongoCli = require('./mongoConfig.js');
+require("dotenv").config();
 
 /**
  * Get port from environment and store in Express.
  */
+
 
 var port = normalizePort(process.env.PORT || '3000');
 app.set('port', port);
@@ -81,8 +84,10 @@ function onError(error) {
  * Event listener for HTTP server "listening" event.
  */
 
-function onListening() {
+async function onListening() {
   var addr = server.address();
+  await MongoCli.init();
+  
   var bind = typeof addr === 'string'
     ? 'pipe ' + addr
     : 'port ' + addr.port;
