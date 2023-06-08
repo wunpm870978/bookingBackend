@@ -28,7 +28,7 @@ var server = http.createServer(app);
  * Listen on provided port, on all network interfaces.
  */
 
-server.listen(port);
+server.listen(port, '127.0.0.1');
 server.on('error', onError);
 server.on('listening', onListening);
 
@@ -87,7 +87,7 @@ function onError(error) {
 async function onListening() {
   var addr = server.address();
   await MongoCli.init();
-  
+
   var bind = typeof addr === 'string'
     ? 'pipe ' + addr
     : 'port ' + addr.port;
