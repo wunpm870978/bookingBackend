@@ -55,9 +55,21 @@ router.post('/login', async (req, res, next) => {
     res.status(404).send('Invalid email or password');
   }
 });
-router.post('/logout', async (req, res, next) => {
 
+router.post('/logout', async (req, res, next) => {
+  if (!req.headers.authorization) {
+    return res.status(403).send('no bearer')
+  }
+  const bearerHeader = req.headers.authorization.split(' ');
+  if (bearerHeader.length !== 2 || bearerHeader[0] !== 'Bearer') {
+    return res.status(403).send('not valid')
+  }
+  await MongoCli.db.collection('tokens')
+    .findOneAndDelete({ access_token: bearerHeader[1] })
+
+  res.status(200).send('Logout successfully')
 });
+
 router.post('/register', async function (req, res, next) {
   try {
     const { shop_id, username, password, email, role } = req.body;
