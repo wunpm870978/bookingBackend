@@ -8,6 +8,7 @@ var indexRouter = require('./routes/index');
 var authRouter = require('./routes/auth/auth');
 var accountRouter = require('./routes/account/account');
 var shopRouter = require('./routes/shop/shop');
+const cors = require('cors');
 
 var app = express();
 
@@ -28,6 +29,10 @@ app.use('/auth', authRouter);
 app.use(function (req, res, next) {
   next(createError(404));
 });
+app.use(cors({
+  origin: '*',
+  optionsSuccessStatus: 200
+}));
 
 // error handler
 app.use(function (err, req, res, next) {

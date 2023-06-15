@@ -5,11 +5,32 @@ const {
   hashWithSalt,
   comparePassword,
   generateTokens,
+  authMeMiddleware,
 } = require('../../action/auth.js')
 
-router.post('/me', (req, res) => {
+router.get('/debug', async (req, res) => {
+  const result = await MongoCli.db.collection('tokens').find()
+  res.status(200).json(result)
+});
 
-})
+router.get('/me', authMeMiddleware, async (req, res) => {
+  const token = req.headers.authorization.split(' ')[1];
+  const { shop_id } = req.body
+
+  const result = await MongoCli.db.collection('tokens')
+    .findOneAndDelete({ fresh_token: token })
+    .catch(err => {
+      console.log('delete err', err)
+      return res.status(400).json(err)
+    })
+
+  if (!result) {
+    return res.status(404).send('Session expired')
+  }
+  await generateTokens({ shop_id }, res);
+  res.status(200)
+    .json({ message: "Logged in sucessfully" });
+});
 
 router.post('/login', async (req, res, next) => {
   try {
@@ -18,26 +39,17 @@ router.post('/login', async (req, res, next) => {
     const user = await MongoCli.db.collection('accounts')
       .findOne(
         { username },
-        { projection: { _id: 0 } }
+        { projection: { shop_id: 1 } }
       )
     if (!user) {
-      res.status(404).send('Invalid email or password');
+      return res.status(404).send('Invalid email or password');
     }
     if (!await comparePassword(password, user.password)) {
       throw ('Invalid email or password')
     }
     delete user.password;
-    const { accessToken, refreshToken } = await generateTokens(user);
-    res.status(200).json({
-      ...user,
-      message: "Logged in sucessfully",
-    });
-    // .cookie('jwt', newRefreshToken, {
-    //     httpOnly: true, 
-    //     secure: true,
-    //     sameSite: 'Strict',  // or 'Lax', it depends
-    //     maxAge: 604800000,  // 7 days
-    // });
+    await generateTokens(user, res);
+    res.status(200).json({ message: "Logged in sucessfully" });
   } catch (err) {
     console.log(err)
     res.status(404).send('Invalid email or password');
@@ -53,34 +65,23 @@ router.post('/register', async function (req, res, next) {
     console.log('hashedPassword', hash)
     const isValid = comparePassword(password, hash)
     if (!isValid) throw ('password salting err happened')
-    const { accessToken, refreshToken } = await generateTokens({
-      shop_id,
-      email,
-      role
-    });
-    const response = await MongoCli.db.collection('accounts')
+    await generateTokens({ shop_id }, res);
+    await MongoCli.db.collection('accounts')
       .insertOne({
         shop_id,
         username,
         password: hash,
         email,
         role,
-        refresh_token: refreshToken
       })
-      .then(res => {
-        return {
-          shop_id: res.shop_id,
-          username: res.username,
-          email: res.email,
-          role,
-          access_token: accessToken,
-          refresh_token: refreshToken
-        }
+      .then(ack => {
+        return res.status(200)
+          .json({ shop_id, username, email, role });
+
       }).catch(err => {
         console.log('err', err)
-        return 'Register failed'
+        return res.status(404).json(err);
       })
-    res.status(200).send(response);
   } catch (error) {
     console.log(error)
     res.status(404).json(error);

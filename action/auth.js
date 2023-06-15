@@ -1,50 +1,72 @@
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const bcrypt = require('bcryptjs');
+const MongoCli = require('../config/mongoConfig.js');
 
 async function authMeMiddleware(req, res, next) {
-  if (!req.headers.authorization) {
+  if (!req.headers.authorization || !req.headers['grant-type']) {
     return res.status(403).send('no bearer')
   }
-  try {
-    const bearerHeader = req.headers.authorization.split(' ');
-    const isValid = await new Promise((resolve, reject) => {
-      jwt.verify(
-        bearerHeader[1],
-        process.env.ACCESS_TOKEN_PRIVATE_KEY,
-        function (err, decoded) {
-          if (err) return reject(false);
-          return resolve(true)
+  const bearerHeader = req.headers.authorization.split(' ');
+  return bearerHeader.length !== 2 || bearerHeader[0] !== 'Bearer'
+    ? res.status(404).send('not valid')
+    : jwt.verify(
+      bearerHeader[1],
+      req.headers['grant-type'] === 'refresh'
+        ? process.env.REFRESH_TOKEN_PRIVATE_KEY
+        : process.env.ACCESS_TOKEN_PRIVATE_KEY,
+      function (err, decoded) {
+        if (err) {
+          if (err.name === 'TokenExpiredError') {
+            // token expired
+            return res.status(401).send('not valid')
+          } else {
+            // mandatory logout
+            return res.status(404).send('no bearer ')
+          }
         }
-      )
-    })
-    if (bearerHeader[0] !== 'Bearer' || !isValid) {
-      return res.status(401).send('not valid')
-    }
-  } catch (err) {
-    return res.status(403).send('no bearer')
-  }
-  next()
+        return next()
+      })
 }
 
-async function generateTokens(user) {
+async function generateTokens(user, res) {
   try {
-    const accessToken = jwt.sign(
+    if (!user.shop_id) {
+      throw new Error('user EMPTY')
+    }
+    const access_token = jwt.sign(
       user,
       process.env.ACCESS_TOKEN_PRIVATE_KEY,
       { expiresIn: "15m", algorithm: "HS256" }
     );
-    const refreshToken = jwt.sign(
+    const refresh_token = jwt.sign(
       user,
       process.env.REFRESH_TOKEN_PRIVATE_KEY,
       { expiresIn: "1d", algorithm: "HS256" }
     );
-
-    // const userToken = await UserToken.findOne({ userId: user._id });
-    // if (userToken) await userToken.remove();
-
-    // await new UserToken({ userId: user._id, token: refreshToken }).save();
-    return Promise.resolve({ accessToken, refreshToken });
+    await MongoCli.db.collection('tokens')
+      .insertOne({
+        refresh_token,
+        shop_id: user.shop_id,
+        createdAt: new Date()
+      })
+      .catch(err => {
+        console.log('insert err', err)
+        return res.status(400).json(err)
+      })
+    res.header('Access-Control-Allow-Credentials', true)
+      .header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+      .cookie("access_token", access_token, {
+        httpOnly: true,
+        // secure: process.env.NODE_ENV === "production",
+      })
+      .cookie("refresh_token", refresh_token, {
+        httpOnly: true,
+        //     sameSite: 'Strict',  // or 'Lax', it depends
+        //     maxAge: 604800000,  // 7 days
+        // secure: process.env.NODE_ENV === "production",
+      })
+    // return Promise.resolve({ access_token, refresh_token });
   } catch (err) {
     return Promise.reject(err);
   }
