@@ -39,12 +39,12 @@ router.post('/login', async (req, res, next) => {
     const user = await MongoCli.db.collection('accounts')
       .findOne(
         { username },
-        { projection: { shop_id: 1 } }
+        { projection: { shop_id: 1, password: 1 } }
       )
     if (!user) {
       return res.status(404).send('Invalid email or password');
     }
-    if (!await comparePassword(password, user.password)) {
+    if (!comparePassword(password, user.password)) {
       throw ('Invalid email or password')
     }
     delete user.password;

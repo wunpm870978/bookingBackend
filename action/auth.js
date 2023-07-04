@@ -58,10 +58,12 @@ async function generateTokens(user, res) {
       .header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
       .cookie("access_token", access_token, {
         httpOnly: true,
+        // sameSite: 'none',
         // secure: process.env.NODE_ENV === "production",
       })
       .cookie("refresh_token", refresh_token, {
         httpOnly: true,
+        // sameSite: 'none',
         //     sameSite: 'Strict',  // or 'Lax', it depends
         //     maxAge: 604800000,  // 7 days
         // secure: process.env.NODE_ENV === "production",
@@ -103,10 +105,10 @@ async function hashWithSalt(password) {
 }
 
 async function comparePassword(password, hashedPassword) {
-  return new Promise(async (resolve) => {
-    const isValid = await bcrypt.compare(password, hashedPassword);
-    resolve(isValid)
-  })
+  bcrypt.compare(password, hashedPassword)
+    .then(res => {
+      return res
+    });
 }
 
 module.exports = {
